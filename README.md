@@ -2,8 +2,9 @@
 
 A full-stack web app for the CallMissed voice AI platform. Users can **talk to a real-time voice agent**, **chat with LLMs** and **generate images**. Every model call goes through the [CallMissed API](https://docs.callmissed.com), and no other external AI API is used.
 
-- **Live app:** _add hosted URL_
-- **Stack:** Next.js 16 (App Router, TypeScript), React 19, Tailwind CSS 4, `livekit-client` for WebRTC audio, Docker + Caddy on AWS EC2
+- **Live app:** https://callmissed-studio-eight.vercel.app
+- **Repo:** https://github.com/ayush-agrawal001/callmissed-studio
+- **Stack:** Next.js 16 (App Router, TypeScript), React 19, Tailwind CSS 4, `livekit-client` for WebRTC audio. Hosted on Vercel (Docker image included for self-hosting).
 
 ## Features
 
@@ -48,7 +49,7 @@ Browser ──HTTPS──▶ Next.js route handlers ──Bearer cm_…──▶
 | **Error UX** | Upstream errors (402 out of credits, 429, content-policy refusals, 5xx) are mapped to readable messages, and an upstream auth error is never shown as the user's fault. |
 | **Security headers** | `Permissions-Policy` allows the microphone on this origin only, plus `nosniff`, `X-Frame-Options: DENY` and a strict referrer policy. |
 
-The rate limiter and budget counter live in process memory. That is correct for the single-instance EC2 deployment. A multi-instance deployment would move them to Redis.
+The rate limiter and budget counter live in process memory. On a single long-running server (the Docker setup) they are exact. On Vercel, where requests can be served by several function instances, each instance keeps its own counters, so the limits are best-effort. They still stop casual abuse, and moving them to Redis would make them global.
 
 ### Project layout
 
@@ -78,17 +79,28 @@ npm run dev                     # http://localhost:3000
 
 Microphone access works on `localhost`. Any other host needs HTTPS.
 
-## Deploy (AWS EC2 free tier)
+## Deploy
 
-The production setup is one `t3.micro`/`t2.micro` instance running two containers: the Next.js standalone server, and **Caddy**, which obtains a Let's Encrypt certificate automatically. HTTPS is required because browsers only allow the microphone on secure origins. Without a domain, the free `<ip-with-dashes>.sslip.io` hostname resolves to the instance and gets a valid certificate.
+### Vercel (live deployment)
 
-1. Launch an Amazon Linux 2023 or Ubuntu instance (free-tier eligible). In its security group, allow inbound **80** and **443** (and 22 for SSH).
+```bash
+npx vercel link                                   # create / link the project
+npx vercel env add CALLMISSED_API_KEY production  # paste the key when prompted (stored encrypted)
+npx vercel deploy --prod
+```
+
+Vercel provides HTTPS, which browsers require before they allow microphone access. Chat streaming and the voice-session routes run as Node.js functions with no extra configuration.
+
+### Self-hosting with Docker (any VM, e.g. AWS EC2)
+
+`deploy/` runs two containers on one machine: the Next.js standalone server, and **Caddy**, which obtains a Let's Encrypt certificate automatically. Without a domain, the free `<ip-with-dashes>.sslip.io` hostname resolves to the server and gets a valid certificate.
+
+1. Launch an Ubuntu or Amazon Linux 2023 instance. Allow inbound **80**, **443** and 22.
 2. SSH in and run:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/main/deploy/ec2-setup.sh | bash -s -- https://github.com/<you>/<repo>.git
+   curl -fsSL https://raw.githubusercontent.com/ayush-agrawal001/callmissed-studio/main/deploy/ec2-setup.sh | bash -s -- https://github.com/ayush-agrawal001/callmissed-studio.git
    ```
-   The script adds swap (a 1 GB instance can't build Next.js otherwise), installs Docker and Compose, asks for the API key (stored in `.env.production`, mode 600), and starts the stack. It then prints the HTTPS URL.
-3. To redeploy after a push: `cd app && git pull && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build`.
+   The script adds swap (a 1 GB machine can't build Next.js otherwise), installs Docker and Compose, asks for the API key (stored in `.env.production`, mode 600), starts the stack and prints the HTTPS URL.
 
 The image builds from the repo's `Dockerfile` (multi-stage, non-root user, health check on `/api/status`, about 230 MB).
 
