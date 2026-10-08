@@ -1,0 +1,29 @@
+# Production stack for a single AWS EC2 instance (free tier t3.micro / t2.micro).
+# Caddy terminates HTTPS with an automatic Let's Encrypt certificate. HTTPS is
+# required: browsers only allow microphone access on secure origins.
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file: ../.env.production
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN, e.g. 13-201-5-9.sslip.io}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,7 @@
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# Stream chat tokens to the browser as they arrive.
+		flush_interval -1
+	}
+}

@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.scratch
+.env*
+!.env.example
+Dockerfile
+deploy
+*.md
