@@ -1,103 +1,116 @@
 import Link from "next/link";
-import { IconChat, IconImage, IconMic } from "@/components/icons";
+import { IconMic } from "@/components/icons";
 
-const FEATURES = [
+const TOOLS = [
   {
     href: "/voice",
     title: "Voice agent",
-    body: "Talk to a real-time AI agent over WebRTC. Pick a persona, voice and language. Interrupt it mid-sentence, read the live transcript and see the call's exact cost.",
-    tag: "STT → LLM → TTS",
-    Icon: IconMic,
+    body: "Real-time conversation over WebRTC. Pick a persona, voice and language, interrupt it mid-sentence, and read the transcript and exact cost when you hang up.",
   },
   {
     href: "/chat",
     title: "Chat",
-    body: "Streaming conversations with Gemma, Kimi, GLM and Sarvam models, with Markdown, optional reasoning traces and read-aloud replies. History is saved in your browser.",
-    tag: "SSE streaming",
-    Icon: IconChat,
+    body: "Streaming answers from Gemma, Kimi, GLM and Sarvam, with an optional thinking trace, Markdown and read-aloud.",
   },
   {
     href: "/images",
-    title: "Image studio",
-    body: "Generate images with FLUX, Leonardo and SDXL models. Control size, seed and negative prompts, and keep a local gallery to download or remix from.",
-    tag: "Text-to-image",
-    Icon: IconImage,
+    title: "Images",
+    body: "Text-to-image with FLUX, Leonardo and SDXL. Set size, seed and negative prompt, and keep a gallery in your browser.",
   },
 ] as const;
 
-const PIPELINE = [
-  ["Browser", "Mic audio over WebRTC with livekit-client"],
-  ["Next.js server", "Creates the session, validates input, rate-limits and keeps the API key secret"],
-  ["CallMissed", "saaras:v3 STT, Gemma/Sarvam LLM, Sonic/Bulbul TTS"],
-  ["Browser", "Agent speech plays back with live captions"],
+const STEPS = [
+  ["Browser", "Your mic streams over WebRTC with livekit-client."],
+  ["Server", "Next.js creates the session, validates input and rate-limits."],
+  ["CallMissed", "Saaras listens, Gemma or Sarvam thinks, Sonic or Bulbul speaks."],
+  ["Browser", "The agent's voice plays back with live captions."],
 ] as const;
 
 export default function Home() {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-4 py-10 sm:px-6 sm:py-14">
-      <section className="flex flex-col gap-5">
-        <span className="w-fit rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted">
-          Built on the CallMissed API
-        </span>
-        <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance sm:text-5xl">
-          One studio for chat, images and voice agents.
-        </h1>
-        <p className="max-w-2xl text-base text-pretty text-muted sm:text-lg">
-          A full-stack demo of the CallMissed voice AI platform. Have a spoken conversation with an AI agent, chat
-          with fast open models or turn a prompt into an image, all through a single OpenAI-compatible API.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/voice"
-            className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-medium text-accent-text hover:opacity-90"
-          >
-            <IconMic width={18} height={18} /> Talk to the agent
-          </Link>
-          <Link
-            href="/chat"
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm font-medium hover:bg-surface-2"
-          >
-            Start a chat
-          </Link>
+    <>
+      <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-8">
+        <section className="flex flex-col gap-8 pt-20 pb-20 sm:pt-28 sm:pb-28">
+          <p className="label flex items-center gap-2.5">
+            <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
+            Voice · Chat · Images
+          </p>
+          <h1 className="max-w-[920px] text-[clamp(2.75rem,6.4vw,5.25rem)] leading-none font-medium tracking-[-0.045em] text-balance">
+            Talk to an agent. Chat with models. Make images.
+          </h1>
+          <p className="max-w-[560px] text-lg leading-relaxed text-pretty text-muted sm:text-[19px]">
+            A small studio for the CallMissed voice AI platform. Every model call goes through one OpenAI-compatible
+            API.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Link
+              href="/voice"
+              className="inline-flex h-12 items-center gap-2.5 rounded-full bg-text px-6 text-[15px] font-medium text-bg transition hover:opacity-85"
+            >
+              <IconMic width={18} height={18} /> Start a voice call
+            </Link>
+            <Link
+              href="/chat"
+              className="inline-flex h-12 items-center rounded-full border border-border-strong px-6 text-[15px] font-medium transition hover:border-text"
+            >
+              Open chat
+            </Link>
+          </div>
+        </section>
+
+        <section aria-labelledby="tools" className="border-t border-text">
+          <h2 id="tools" className="label py-4 font-normal">
+            Tools
+          </h2>
+          <ul>
+            {TOOLS.map(({ href, title, body }, i) => (
+              <li key={href} className="border-t border-border last:border-b">
+                <Link href={href} className="group flex flex-wrap items-baseline gap-x-8 gap-y-3 py-8">
+                  <span className="w-12 font-mono text-[13px] text-muted">0{i + 1}</span>
+                  <span className="flex-[1_1_260px] text-[28px] font-medium tracking-[-0.03em] sm:text-[32px]">
+                    {title}
+                  </span>
+                  <span className="flex-[2_1_380px] text-base leading-relaxed text-muted">{body}</span>
+                  <span
+                    aria-hidden="true"
+                    className="text-[22px] transition-transform group-hover:translate-x-1 group-hover:text-accent"
+                  >
+                    →
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section aria-labelledby="how" className="py-24 sm:py-28">
+          <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+            <h2 id="how" className="text-[32px] font-medium tracking-[-0.035em] sm:text-[40px]">
+              How a voice call works
+            </h2>
+            <p className="max-w-[380px] text-[15px] leading-relaxed text-muted">
+              The API key stays on the server. The browser only ever gets a one-time WebRTC token.
+            </p>
+          </div>
+          <ol className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-8">
+            {STEPS.map(([who, what], i) => (
+              <li key={i} className="flex flex-col gap-2.5 border-t border-text pt-5">
+                <span className="font-mono text-xs text-muted">
+                  0{i + 1} — {who}
+                </span>
+                <span className="text-[17px] leading-normal">{what}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
+
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-[1200px] flex-wrap justify-between gap-3 px-4 py-7 text-[13px] text-muted sm:px-8">
+          <span>CallMissed Studio</span>
+          <span className="font-mono text-xs">Built on the CallMissed API</span>
         </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        {FEATURES.map(({ href, title, body, tag, Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="group flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 transition hover:border-accent"
-          >
-            <span className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent">
-              <Icon />
-            </span>
-            <h2 className="font-semibold">{title}</h2>
-            <p className="text-sm leading-relaxed text-muted">{body}</p>
-            <span className="mt-auto pt-2 text-xs font-medium text-accent">
-              {tag} <span className="inline-block transition group-hover:translate-x-0.5">→</span>
-            </span>
-          </Link>
-        ))}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
-        <h2 className="font-semibold">How a voice call works</h2>
-        <ol className="mt-4 grid gap-3 sm:grid-cols-4">
-          {PIPELINE.map(([who, what], i) => (
-            <li key={i} className="relative rounded-xl bg-surface-2 p-3.5">
-              <span className="text-xs font-medium text-accent">Step {i + 1}</span>
-              <p className="mt-1 text-sm font-medium">{who}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">{what}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-4 text-xs leading-relaxed text-muted">
-          The API key never reaches the browser. The server hands out a one-time WebRTC token per call, signs session
-          tickets so visitors can only read their own transcripts, and enforces per-visitor rate limits plus a daily
-          credit ceiling.
-        </p>
-      </section>
-    </div>
+      </footer>
+    </>
   );
 }

@@ -6,10 +6,8 @@ import remarkGfm from "remark-gfm";
 import type { ChatEvent } from "@/app/api/chat/route";
 import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from "@/lib/catalog";
 import { load, save, uid } from "@/lib/storage";
-import { apiError, IconButton, Select } from "@/components/ui";
+import { apiError, IconButton } from "@/components/ui";
 import {
-  IconBrain,
-  IconChat,
   IconCopy,
   IconMenu,
   IconPlus,
@@ -25,6 +23,7 @@ type Msg = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  model?: string;
   reasoning?: string;
   error?: string;
   tokens?: number;
@@ -36,10 +35,12 @@ const PREFS_KEY = "cm.chat.prefs.v1";
 
 const SUGGESTIONS = [
   "Explain how a voice agent turns speech into a reply, step by step",
-  "Write a friendly WhatsApp message reminding a customer about their appointment",
+  "Write a friendly WhatsApp reminder for a customer's appointment",
   "Translate “Your order is out for delivery” into Hindi, Tamil and Marathi",
   "Give me a TypeScript function that debounces another function",
 ];
+
+const modelLabel = (id?: string) => CHAT_MODELS.find((m) => m.id === id)?.label ?? id ?? "Assistant";
 
 export function ChatApp() {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -81,7 +82,7 @@ export function ChatApp() {
 
   const runCompletion = useCallback(
     async (chatId: string, history: Msg[], modelId: string) => {
-      const assistant: Msg = { id: uid(), role: "assistant", content: "" };
+      const assistant: Msg = { id: uid(), role: "assistant", content: "", model: modelId };
       setChats((cs) =>
         cs.map((c) => (c.id === chatId ? { ...c, messages: [...history, assistant], updatedAt: Date.now() } : c)),
       );
@@ -194,43 +195,55 @@ export function ChatApp() {
         onDelete={deleteChat}
       />
 
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3 sm:px-6">
+      <section aria-label="Conversation" className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2.5 sm:px-8">
           <IconButton label="Chat history" className="lg:hidden" onClick={() => setHistoryOpen(true)}>
-            <IconMenu />
+            <IconMenu width={18} height={18} />
           </IconButton>
-          <Select label="Model" value={model} onChange={(e) => setModel(e.target.value)} disabled={streaming}>
-            {CHAT_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label} · {m.blurb}
-              </option>
-            ))}
-          </Select>
-          <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm text-muted has-[:checked]:border-accent has-[:checked]:text-accent">
-            <input
-              type="checkbox"
-              className="accent-[var(--accent)]"
-              checked={thinking}
-              onChange={(e) => setThinking(e.target.checked)}
-            />
-            <IconBrain width={16} height={16} />
-            Thinking
+          <label className="flex items-center gap-2.5 font-mono text-xs text-muted">
+            MODEL
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={streaming}
+              className="h-9 rounded-full border border-border-strong bg-transparent px-3 font-sans text-sm font-medium text-text outline-none focus:border-text disabled:opacity-50"
+            >
+              {CHAT_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label} — {m.blurb.toLowerCase()}
+                </option>
+              ))}
+            </select>
           </label>
           <button
             type="button"
-            onClick={newChat}
-            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm hover:bg-surface-2 lg:hidden"
+            role="switch"
+            aria-checked={thinking}
+            onClick={() => setThinking((t) => !t)}
+            className="flex h-11 items-center gap-2.5 text-sm"
           >
-            <IconPlus width={16} height={16} /> New
+            <span
+              className={`relative h-[22px] w-9 rounded-full transition-colors ${thinking ? "bg-accent" : "bg-border-strong"}`}
+              aria-hidden="true"
+            >
+              <span
+                className={`absolute top-[3px] size-4 rounded-full bg-white shadow-sm transition-[left] ${
+                  thinking ? "left-[17px]" : "left-[3px]"
+                }`}
+              />
+            </span>
+            Thinking
+          </button>
+          <button
+            type="button"
+            onClick={newChat}
+            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full border border-border-strong px-3.5 text-sm hover:border-text lg:hidden"
+          >
+            <IconPlus width={15} height={15} /> New
           </button>
         </div>
 
-        <Messages
-          chat={active}
-          streaming={streaming}
-          onSuggestion={send}
-          onRegenerate={regenerate}
-        />
+        <Messages chat={active} streaming={streaming} onSuggestion={send} onRegenerate={regenerate} />
 
         <Composer streaming={streaming} onSend={send} onStop={() => abortRef.current?.abort()} />
       </section>
@@ -250,51 +263,55 @@ function HistoryPanel(props: {
   const { chats, activeId, open } = props;
   return (
     <>
-      {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={props.onClose} aria-hidden="true" />}
+      {open && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={props.onClose} aria-hidden="true" />}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-border bg-surface transition-transform lg:static lg:z-auto lg:w-64 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col gap-5 border-r border-border bg-bg px-4 py-5 transition-transform lg:static lg:z-auto lg:w-[260px] lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Chat history"
       >
-        <div className="flex items-center gap-2 p-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={props.onNew}
-            className="flex flex-1 items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-2"
+            className="flex h-11 flex-1 items-center gap-2 rounded-xl border border-border-strong bg-surface px-3.5 text-sm font-medium transition hover:border-text"
           >
             <IconPlus width={16} height={16} /> New chat
           </button>
           <IconButton label="Close history" className="lg:hidden" onClick={props.onClose}>
-            <IconX />
+            <IconX width={18} height={18} />
           </IconButton>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {chats.length === 0 ? (
-            <p className="px-3 py-6 text-center text-xs text-muted">Your conversations are saved in this browser.</p>
+            <p className="px-2.5 text-[13px] leading-relaxed text-muted">Your conversations are saved in this browser.</p>
           ) : (
-            <ul className="flex flex-col gap-0.5">
-              {chats.map((c) => (
-                <li key={c.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => props.onSelect(c.id)}
-                    className={`w-full truncate rounded-lg py-2 pr-9 pl-3 text-left text-sm ${
-                      c.id === activeId ? "bg-accent-soft text-accent" : "text-text hover:bg-surface-2"
-                    }`}
-                  >
-                    {c.title || "Untitled"}
-                  </button>
-                  <IconButton
-                    label="Delete chat"
-                    onClick={() => props.onDelete(c.id)}
-                    className="absolute top-1 right-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
-                  >
-                    <IconTrash width={15} height={15} />
-                  </IconButton>
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="label mb-2 px-2.5 text-[11px]">History</p>
+              <ul className="flex flex-col gap-0.5">
+                {chats.map((c) => (
+                  <li key={c.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => props.onSelect(c.id)}
+                      aria-current={c.id === activeId ? "page" : undefined}
+                      className={`w-full truncate rounded-[10px] py-2.5 pr-10 pl-2.5 text-left text-sm transition ${
+                        c.id === activeId ? "bg-surface-3 text-text" : "text-muted hover:text-text"
+                      }`}
+                    >
+                      {c.title || "Untitled"}
+                    </button>
+                    <IconButton
+                      label="Delete chat"
+                      onClick={() => props.onDelete(c.id)}
+                      className="absolute top-0.5 right-0.5 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                    >
+                      <IconTrash width={14} height={14} />
+                    </IconButton>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       </aside>
@@ -326,25 +343,29 @@ function Messages({
 
   if (!chat || messages.length === 0) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-10">
-        <div className="text-center">
-          <span className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-accent-soft text-accent">
-            <IconChat width={24} height={24} />
-          </span>
-          <h2 className="text-xl font-semibold tracking-tight">What can I help with?</h2>
-          <p className="mt-1 text-sm text-muted">Streaming answers from open and Indic LLMs on CallMissed.</p>
-        </div>
-        <div className="grid w-full max-w-2xl gap-2 sm:grid-cols-2">
-          {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onSuggestion(s)}
-              className="rounded-xl border border-border bg-surface p-3.5 text-left text-sm text-muted transition hover:border-accent hover:text-text"
-            >
-              {s}
-            </button>
-          ))}
+      <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 py-12 sm:px-8">
+        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-10">
+          <div className="flex flex-col gap-3">
+            <p className="label">Chat</p>
+            <h1 className="text-4xl leading-[1.05] font-medium tracking-[-0.04em] sm:text-5xl">Ask anything.</h1>
+            <p className="text-[17px] text-muted">Streaming answers from open and Indic models on CallMissed.</p>
+          </div>
+          <ul className="border-t border-border">
+            {SUGGESTIONS.map((s) => (
+              <li key={s} className="border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => onSuggestion(s)}
+                  className="group flex w-full items-center justify-between gap-4 py-4 text-left text-[15px] text-muted transition hover:text-text"
+                >
+                  {s}
+                  <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">
+                    →
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     );
@@ -359,11 +380,12 @@ function Messages({
       }}
       className="min-h-0 flex-1 overflow-y-auto"
     >
-      <ol className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6" aria-live="polite">
+      <ol className="mx-auto flex max-w-[760px] flex-col gap-8 px-4 py-10 sm:px-8" aria-live="polite">
         {messages.map((m, i) => (
           <MessageItem
             key={m.id}
             msg={m}
+            fallbackModel={chat.model}
             live={streaming && i === messages.length - 1}
             canRegenerate={!streaming && i === messages.length - 1 && m.role === "assistant"}
             onRegenerate={onRegenerate}
@@ -376,11 +398,13 @@ function Messages({
 
 function MessageItem({
   msg,
+  fallbackModel,
   live,
   canRegenerate,
   onRegenerate,
 }: {
   msg: Msg;
+  fallbackModel: string;
   live: boolean;
   canRegenerate: boolean;
   onRegenerate: () => void;
@@ -388,7 +412,7 @@ function MessageItem({
   if (msg.role === "user") {
     return (
       <li className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-accent px-4 py-2.5 whitespace-pre-wrap text-accent-text">
+        <div className="max-w-[80%] rounded-[20px] bg-surface-3 px-[18px] py-3 text-[15px] leading-relaxed whitespace-pre-wrap">
           {msg.content}
         </div>
       </li>
@@ -397,44 +421,34 @@ function MessageItem({
 
   const waiting = live && !msg.content && !msg.reasoning;
   return (
-    <li className="flex flex-col gap-2">
+    <li className="flex flex-col gap-3.5">
+      <span className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">
+        {modelLabel(msg.model ?? fallbackModel)}
+      </span>
       {msg.reasoning && (
-        <details className="group rounded-lg border border-border bg-surface-2/60 text-sm" open={live && !msg.content}>
-          <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-muted select-none">
-            <IconBrain width={15} height={15} />
-            {live && !msg.content ? "Thinking…" : "Thought process"}
-          </summary>
-          <p className="max-h-60 overflow-y-auto border-t border-border px-3 py-2 whitespace-pre-wrap text-muted">
-            {msg.reasoning}
-          </p>
+        <details className="rounded-xl border border-border px-3.5 py-2.5 text-sm text-muted" open={live && !msg.content}>
+          <summary className="cursor-pointer select-none">{live && !msg.content ? "Thinking…" : "Thought process"}</summary>
+          <p className="mt-2.5 max-h-60 overflow-y-auto leading-relaxed whitespace-pre-wrap">{msg.reasoning}</p>
         </details>
       )}
       {waiting ? (
-        <div className="flex gap-1.5 py-2" aria-label="Waiting for reply">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="size-2 animate-bounce rounded-full bg-muted"
-              style={{ animationDelay: `${i * 120}ms` }}
-            />
-          ))}
-        </div>
+        <span className="breathe block size-2.5 rounded-full bg-accent" aria-label="Waiting for reply" />
       ) : (
         msg.content && (
-          <div className={`prose-chat text-[15px] ${live ? "caret" : ""}`}>
+          <div className={`prose-chat ${live ? "caret" : ""}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
           </div>
         )
       )}
       {msg.error && (
-        <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <p role="alert" className="rounded-xl border border-danger/30 px-4 py-3 text-sm text-danger">
           {msg.error}
         </p>
       )}
       {!live && msg.content && <MessageActions msg={msg} canRegenerate={canRegenerate} onRegenerate={onRegenerate} />}
       {!live && !msg.content && canRegenerate && (
         <div>
-          <button type="button" onClick={onRegenerate} className="text-sm text-accent underline underline-offset-2">
+          <button type="button" onClick={onRegenerate} className="text-sm underline underline-offset-4">
             Retry
           </button>
         </div>
@@ -496,7 +510,7 @@ function MessageActions({
   };
 
   return (
-    <div className="-ml-1.5 flex items-center gap-0.5 text-muted">
+    <div className="-ml-2 flex flex-wrap items-center gap-0.5 text-muted">
       <IconButton label={copied ? "Copied" : "Copy"} onClick={copy}>
         <IconCopy width={16} height={16} className={copied ? "text-success" : ""} />
       </IconButton>
@@ -505,16 +519,18 @@ function MessageActions({
         onClick={speak}
         disabled={speech === "loading"}
       >
-        {speech === "playing" ? <IconStop width={14} height={14} /> : <IconSpeaker width={16} height={16} />}
+        {speech === "playing" ? <IconStop width={13} height={13} /> : <IconSpeaker width={16} height={16} />}
       </IconButton>
       {canRegenerate && (
         <IconButton label="Regenerate" onClick={onRegenerate}>
           <IconRefresh width={16} height={16} />
         </IconButton>
       )}
-      {speech === "loading" && <span className="ml-2 text-xs">Generating speech…</span>}
-      {speechError && <span className="ml-2 text-xs text-danger">{speechError}</span>}
-      {msg.tokens !== undefined && <span className="ml-2 text-xs">{msg.tokens.toLocaleString()} tokens</span>}
+      <span className="ml-2 font-mono text-[11px]">
+        {speech === "loading" && "Generating speech… "}
+        {speechError && <span className="text-danger">{speechError} </span>}
+        {msg.tokens !== undefined && `${msg.tokens.toLocaleString()} tokens`}
+      </span>
     </div>
   );
 }
@@ -545,9 +561,9 @@ function Composer({
   };
 
   return (
-    <div className="border-t border-border bg-bg px-4 py-3 sm:px-6">
+    <div className="px-4 pt-2 pb-5 sm:px-8 sm:pb-7">
       <form
-        className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border bg-surface p-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-[var(--ring)]"
+        className="mx-auto flex max-w-[760px] items-end gap-2.5 rounded-3xl border border-border-strong bg-surface py-2 pr-2 pl-5 shadow-[0_8px_24px_-16px_rgba(17,17,17,0.18)] transition focus-within:border-text"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -570,30 +586,30 @@ function Composer({
               submit();
             }
           }}
-          className="max-h-[200px] min-h-[40px] flex-1 resize-none bg-transparent px-2 py-2 text-[15px] outline-none placeholder:text-muted"
+          className="max-h-[200px] min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-normal outline-none placeholder:text-muted"
         />
         {streaming ? (
           <button
             type="button"
             onClick={onStop}
             aria-label="Stop generating"
-            className="grid size-10 shrink-0 place-items-center rounded-xl bg-text text-bg"
+            className="grid size-11 shrink-0 place-items-center rounded-full bg-text text-bg"
           >
-            <IconStop width={16} height={16} />
+            <IconStop width={14} height={14} />
           </button>
         ) : (
           <button
             type="submit"
             aria-label="Send"
             disabled={!text.trim()}
-            className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-text disabled:opacity-40"
+            className="grid size-11 shrink-0 place-items-center rounded-full bg-text text-bg transition disabled:opacity-25"
           >
             <IconSend width={18} height={18} />
           </button>
         )}
       </form>
-      <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted">
-        Enter to send · Shift+Enter for a new line · AI can make mistakes
+      <p className="mt-2.5 text-center font-mono text-[11px] text-muted">
+        Enter to send · Shift + Enter for a new line
       </p>
     </div>
   );

@@ -11,7 +11,7 @@ import {
   type TtsModel,
 } from "@/lib/catalog";
 import { load, save } from "@/lib/storage";
-import { Button, ErrorBanner, PageHeader, Select, Spinner } from "@/components/ui";
+import { Button, ErrorBanner, FIELD, PageIntro, Select, Spinner } from "@/components/ui";
 import { IconMic, IconMicOff, IconPhoneOff, IconSpeaker } from "@/components/icons";
 import { type AgentState, type CallConfig, type Line, useVoiceCall } from "./useVoiceCall";
 
@@ -85,47 +85,45 @@ export function VoiceAgent() {
     void start(config);
   };
 
+  const persona = VOICE_PERSONAS.find((p) => p.prompt === config.systemPrompt);
+
   return (
-    <div className="flex flex-1 flex-col">
-      <PageHeader
-        title="Voice agent"
-        subtitle="Real-time speech-to-speech over WebRTC · CallMissed STT → LLM → TTS pipeline"
-      />
+    <div className="mx-auto w-full max-w-[1200px] px-4 py-10 sm:px-8 sm:py-14">
       {/* Remote audio elements are mounted here by LiveKit. */}
       <div ref={attachAudioHost} className="hidden" />
 
-      <div className="flex-1 p-4 sm:p-6">
-        {phase === "idle" && (
-          <Setup
-            personaId={personaId}
-            config={config}
-            error={error}
-            onPersona={pickPersona}
-            onChange={set}
-            onStart={startCall}
-            onDismissError={clearError}
+      {phase === "idle" && (
+        <Setup
+          personaId={personaId}
+          config={config}
+          error={error}
+          onPersona={pickPersona}
+          onChange={set}
+          onStart={startCall}
+          onDismissError={clearError}
+        />
+      )}
+      {(phase === "connecting" || phase === "live") && (
+        <div className="flex flex-wrap items-stretch gap-6">
+          <LiveCall
+            connecting={phase === "connecting"}
+            agentName={persona ? `${persona.name} · ${persona.role}` : "Custom agent"}
+            agentState={agentState}
+            getLevels={getLevels}
+            startedAt={startedAt}
+            maxSeconds={maxSeconds}
+            muted={muted}
+            needsAudioUnlock={needsAudioUnlock}
+            onToggleMute={toggleMute}
+            onUnlockAudio={unlockAudio}
+            onHangUp={hangUp}
           />
-        )}
-        {(phase === "connecting" || phase === "live") && (
-          <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_380px]">
-            <LiveCall
-              connecting={phase === "connecting"}
-              agentName={VOICE_PERSONAS.find((p) => p.prompt === config.systemPrompt)?.name ?? "Custom agent"}
-              agentState={agentState}
-              getLevels={getLevels}
-              startedAt={startedAt}
-              maxSeconds={maxSeconds}
-              muted={muted}
-              needsAudioUnlock={needsAudioUnlock}
-              onToggleMute={toggleMute}
-              onUnlockAudio={unlockAudio}
-              onHangUp={hangUp}
-            />
-            <TranscriptPanel lines={lines} />
-          </div>
-        )}
-        {phase === "ended" && <Summary ticket={ticket} liveLines={lines} onAgain={reset} />}
-      </div>
+          <TranscriptPanel lines={lines} agentName={persona?.name ?? "Agent"} />
+        </div>
+      )}
+      {phase === "ended" && (
+        <Summary ticket={ticket} liveLines={lines} agentName={persona?.name ?? "Agent"} onAgain={reset} />
+      )}
     </div>
   );
 }
@@ -143,119 +141,137 @@ function Setup(props: {
   const voices = VOICES[config.ttsModel as TtsModel];
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_340px]">
-      <div className="flex flex-col gap-5">
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium">Choose an agent</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {VOICE_PERSONAS.map((p) => (
-              <label
-                key={p.id}
-                className={`cursor-pointer rounded-xl border p-3.5 transition ${
-                  props.personaId === p.id ? "border-accent bg-accent-soft" : "border-border bg-surface hover:border-muted"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="persona"
-                  className="sr-only"
-                  checked={props.personaId === p.id}
-                  onChange={() => props.onPersona(p.id)}
-                />
-                <span className="block text-sm font-medium">{p.name}</span>
-                <span className="mt-0.5 block text-xs text-muted">{p.tagline}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+    <div className="flex flex-col gap-12">
+      <PageIntro eyebrow="Voice agent · Setup" title="Who should pick up?">
+        Choose a persona, tune what it knows, then start a real-time call in your browser.
+      </PageIntro>
 
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Instructions
-          <textarea
-            rows={6}
-            maxLength={2000}
-            value={config.systemPrompt}
-            onChange={(e) => onChange({ systemPrompt: e.target.value })}
-            className="resize-y rounded-xl border border-border bg-surface p-3 text-sm font-normal outline-none focus:border-accent focus:ring-2 focus:ring-[var(--ring)]"
-          />
-          <span className="text-xs font-normal text-muted">
-            Edit freely to make your own agent. {config.systemPrompt.length}/2000
-          </span>
-        </label>
+      <div className="flex flex-wrap items-start gap-12">
+        <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-9">
+          <fieldset className="flex flex-col">
+            <legend className="mb-3.5 text-sm font-medium">Persona</legend>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
+              {VOICE_PERSONAS.map((p) => {
+                const on = props.personaId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => props.onPersona(p.id)}
+                    className={`flex min-h-[108px] flex-col gap-2 rounded-2xl bg-surface px-5 py-4 text-left transition ${
+                      on ? "border-[1.5px] border-text" : "border border-border hover:border-border-strong"
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-base font-medium tracking-[-0.01em]">{p.name}</span>
+                      <span className={`size-2 shrink-0 rounded-full ${on ? "bg-accent" : ""}`} aria-hidden="true" />
+                    </span>
+                    <span className="text-sm leading-normal text-muted">
+                      {p.role}. {p.tagline}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
 
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Opening line
-          <input
-            maxLength={300}
-            value={config.greeting}
-            onChange={(e) => onChange({ greeting: e.target.value })}
-            className="h-10 rounded-xl border border-border bg-surface px-3 text-sm font-normal outline-none focus:border-accent focus:ring-2 focus:ring-[var(--ring)]"
-          />
-        </label>
-      </div>
+          <label className="flex flex-col gap-2.5 text-sm font-medium">
+            Instructions
+            <textarea
+              rows={6}
+              maxLength={2000}
+              value={config.systemPrompt}
+              onChange={(e) => onChange({ systemPrompt: e.target.value })}
+              className={`${FIELD} resize-y py-3.5 leading-relaxed font-normal`}
+            />
+            <span className="font-mono text-xs font-normal text-muted">
+              Edit freely to make your own agent · {config.systemPrompt.length} / 2000
+            </span>
+          </label>
 
-      <aside className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4 lg:self-start">
-        <h2 className="text-sm font-medium">Voice stack</h2>
-        <fieldset>
-          <legend className="mb-1.5 text-xs font-medium text-muted">Speech engine</legend>
-          <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface-2 p-1">
-            {(
-              [
-                ["sonic-3.6", "Sonic 3.6", "Most natural"],
-                ["bulbul:v3", "Bulbul v3", "Indic voices"],
-              ] as const
-            ).map(([id, label, note]) => (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={config.ttsModel === id}
-                onClick={() => onChange({ ttsModel: id, voice: VOICES[id][0].id })}
-                className={`rounded-md px-2 py-1.5 text-left text-xs ${
-                  config.ttsModel === id ? "bg-surface font-medium shadow-sm" : "text-muted"
-                }`}
-              >
-                {label}
-                <span className="block text-[11px] font-normal text-muted">{note}</span>
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <Select label="Voice" value={config.voice} onChange={(e) => onChange({ voice: e.target.value })}>
-          {voices.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.label} {v.note ? `· ${v.note}` : ""}
-            </option>
-          ))}
-        </Select>
-        <Select label="Language" value={config.language} onChange={(e) => onChange({ language: e.target.value })}>
-          {VOICE_LANGUAGES.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.label}
-            </option>
-          ))}
-        </Select>
-        <Select label="Brain (LLM)" value={config.llmModel} onChange={(e) => onChange({ llmModel: e.target.value })}>
-          {VOICE_LLMS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label} · {m.note}
-            </option>
-          ))}
-        </Select>
+          <label className="flex flex-col gap-2.5 text-sm font-medium">
+            Opening line
+            <input
+              maxLength={300}
+              value={config.greeting}
+              onChange={(e) => onChange({ greeting: e.target.value })}
+              className={`${FIELD} h-12 font-normal`}
+            />
+          </label>
+        </div>
 
-        {props.error && <ErrorBanner message={props.error} onDismiss={props.onDismissError} />}
-
-        <Button
-          variant="primary"
-          className="mt-1 h-12 text-base"
-          onClick={props.onStart}
-          disabled={config.systemPrompt.trim().length < 10}
+        <aside
+          aria-label="Voice stack"
+          className="flex min-w-0 flex-[1_1_340px] flex-col gap-5 rounded-[20px] border border-border bg-surface p-7"
         >
-          <IconMic /> Start call
-        </Button>
-        <p className="text-center text-xs text-muted">
-          Calls end automatically after {MAX_VOICE_SECONDS / 60} minutes. Use headphones for the best experience.
-        </p>
-      </aside>
+          <h2 className="label font-normal">Voice stack</h2>
+
+          <div className="flex flex-col gap-2.5">
+            <span id="engine-label" className="text-sm font-medium">
+              Speech engine
+            </span>
+            <div role="group" aria-labelledby="engine-label" className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
+              {(
+                [
+                  ["sonic-3.6", "Sonic 3.6", "Most natural"],
+                  ["bulbul:v3", "Bulbul v3", "Indic voices"],
+                ] as const
+              ).map(([id, label, note]) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={config.ttsModel === id}
+                  onClick={() => onChange({ ttsModel: id, voice: VOICES[id][0].id })}
+                  className={`flex min-h-[52px] flex-col justify-center rounded-[9px] px-3 py-2 text-left transition ${
+                    config.ttsModel === id ? "bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "hover:bg-surface/50"
+                  }`}
+                >
+                  <span className="text-sm font-medium">{label}</span>
+                  <span className="text-xs text-muted">{note}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Select label="Voice" value={config.voice} onChange={(e) => onChange({ voice: e.target.value })}>
+            {voices.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+                {v.note ? ` — ${v.note.toLowerCase()}` : ""}
+              </option>
+            ))}
+          </Select>
+          <Select label="Language" value={config.language} onChange={(e) => onChange({ language: e.target.value })}>
+            {VOICE_LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
+          </Select>
+          <Select label="Brain" value={config.llmModel} onChange={(e) => onChange({ llmModel: e.target.value })}>
+            {VOICE_LLMS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label} — {m.note.toLowerCase()}
+              </option>
+            ))}
+          </Select>
+
+          {props.error && <ErrorBanner message={props.error} onDismiss={props.onDismissError} />}
+
+          <Button
+            variant="primary"
+            className="mt-1.5 h-14 text-base"
+            onClick={props.onStart}
+            disabled={config.systemPrompt.trim().length < 10}
+          >
+            <IconMic width={18} height={18} /> Start call
+          </Button>
+          <p className="text-center font-mono text-xs leading-relaxed text-muted">
+            Calls end after {MAX_VOICE_SECONDS / 60}:00 · headphones recommended
+          </p>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -275,55 +291,60 @@ function LiveCall(props: {
 }) {
   const { connecting, muted } = props;
   return (
-    <div className="flex flex-col items-center justify-center gap-8 rounded-3xl border border-border bg-surface px-6 py-10">
-      <div className="text-center">
-        <p className="text-sm text-muted">{props.agentName}</p>
-        <p className="mt-1 text-xl font-semibold" aria-live="polite">
+    <section
+      aria-label="Call"
+      className="flex min-h-[600px] min-w-0 flex-[999_1_560px] flex-col items-center justify-between gap-8 rounded-[28px] border border-border bg-surface px-6 py-10"
+    >
+      <div className="flex flex-col items-center gap-2.5 text-center">
+        <p className="label">{props.agentName}</p>
+        <p className="text-[34px] font-medium tracking-[-0.035em] sm:text-[40px]" aria-live="polite">
           {connecting ? "Connecting…" : STATE_LABEL[props.agentState]}
         </p>
       </div>
 
       <Orb getLevels={props.getLevels} state={connecting ? "connecting" : props.agentState} />
 
-      <Timer startedAt={props.startedAt} maxSeconds={props.maxSeconds} />
+      <div className="flex flex-col items-center gap-7">
+        <Timer startedAt={props.startedAt} maxSeconds={props.maxSeconds} />
 
-      {props.needsAudioUnlock && (
-        <Button variant="primary" onClick={props.onUnlockAudio}>
-          <IconSpeaker /> Tap to enable audio
-        </Button>
-      )}
+        {props.needsAudioUnlock && (
+          <Button variant="primary" onClick={props.onUnlockAudio}>
+            <IconSpeaker width={18} height={18} /> Tap to enable audio
+          </Button>
+        )}
 
-      <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={props.onToggleMute}
-          disabled={connecting}
-          aria-pressed={muted}
-          aria-label={muted ? "Unmute microphone" : "Mute microphone"}
-          className={`grid size-14 place-items-center rounded-full border transition disabled:opacity-40 ${
-            muted ? "border-danger bg-danger/10 text-danger" : "border-border bg-surface-2 hover:bg-border"
-          }`}
-        >
-          {muted ? <IconMicOff width={24} height={24} /> : <IconMic width={24} height={24} />}
-        </button>
-        <button
-          type="button"
-          onClick={props.onHangUp}
-          aria-label="End call"
-          className="grid size-16 place-items-center rounded-full bg-danger text-white shadow-lg transition hover:opacity-90"
-        >
-          <IconPhoneOff width={26} height={26} />
-        </button>
+        <div className="flex items-center gap-5">
+          <button
+            type="button"
+            onClick={props.onToggleMute}
+            disabled={connecting}
+            aria-pressed={muted}
+            aria-label={muted ? "Unmute microphone" : "Mute microphone"}
+            className={`grid size-14 place-items-center rounded-full border transition disabled:opacity-40 ${
+              muted ? "border-text bg-text text-bg" : "border-border-strong bg-surface hover:border-text"
+            }`}
+          >
+            {muted ? <IconMicOff width={22} height={22} /> : <IconMic width={22} height={22} />}
+          </button>
+          <button
+            type="button"
+            onClick={props.onHangUp}
+            aria-label="End call"
+            className="grid size-[68px] place-items-center rounded-full bg-danger text-white transition hover:opacity-90"
+          >
+            <IconPhoneOff width={26} height={26} />
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-// Visualizer driven by live audio levels. It writes styles directly in a
-// rAF loop so 60fps level changes never trigger React re-renders.
+// Concentric hairline rings around an accent core. Levels are written straight
+// to the DOM in a rAF loop so 60fps audio changes never re-render React.
 function Orb({ getLevels, state }: { getLevels: () => { agent: number; user: number }; state: AgentState }) {
-  const coreRef = useRef<HTMLDivElement>(null);
-  const ringRef = useRef<HTMLDivElement>(null);
+  const coreRef = useRef<HTMLSpanElement>(null);
+  const ringRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     let raf = 0;
@@ -334,10 +355,10 @@ function Orb({ getLevels, state }: { getLevels: () => { agent: number; user: num
       // Smooth the raw levels so the orb breathes instead of flickering.
       agentLevel += (levels.agent - agentLevel) * 0.25;
       userLevel += (levels.user - userLevel) * 0.25;
-      if (coreRef.current) coreRef.current.style.transform = `scale(${1 + Math.min(agentLevel * 1.6, 0.45)})`;
+      if (coreRef.current) coreRef.current.style.transform = `scale(${1 + Math.min(agentLevel * 1.4, 0.4)})`;
       if (ringRef.current) {
-        ringRef.current.style.transform = `scale(${1.15 + Math.min(userLevel * 2.2, 0.6)})`;
-        ringRef.current.style.opacity = String(0.25 + Math.min(userLevel * 3, 0.6));
+        ringRef.current.style.transform = `scale(${1 + Math.min(userLevel * 1.6, 0.35)})`;
+        ringRef.current.style.borderColor = userLevel > 0.04 ? "var(--text)" : "var(--border-strong)";
       }
       raf = requestAnimationFrame(tick);
     };
@@ -345,22 +366,19 @@ function Orb({ getLevels, state }: { getLevels: () => { agent: number; user: num
     return () => cancelAnimationFrame(raf);
   }, [getLevels]);
 
-  const tone =
-    state === "speaking"
-      ? "from-accent to-fuchsia-500"
-      : state === "thinking"
-        ? "from-amber-400 to-accent animate-pulse"
-        : state === "listening"
-          ? "from-accent to-sky-400"
-          : "from-muted to-border animate-pulse";
-
+  const idle = state === "connecting" || state === "initializing";
   return (
-    <div className="relative grid size-48 place-items-center sm:size-56" aria-hidden="true">
-      <div ref={ringRef} className="absolute inset-6 rounded-full border-2 border-accent/60 transition-transform duration-75" />
-      <div
-        ref={coreRef}
-        className={`size-28 rounded-full bg-gradient-to-br shadow-[0_0_60px_-10px_var(--accent)] transition-transform duration-75 sm:size-32 ${tone}`}
-      />
+    <div className="relative grid size-[260px] place-items-center sm:size-[300px]" aria-hidden="true">
+      <span className="absolute inset-0 rounded-full border border-surface-3" />
+      <span className="absolute inset-[13%] rounded-full border border-border" />
+      <span ref={ringRef} className="absolute inset-[27%] rounded-full border border-border-strong transition-[border-color] duration-200" />
+      <span ref={coreRef} className="block transition-transform duration-75">
+        <span
+          className={`block size-[92px] rounded-full sm:size-[108px] ${
+            idle ? "breathe bg-border-strong" : "bg-accent shadow-[0_0_0_14px_color-mix(in_srgb,var(--accent)_12%,transparent),0_24px_60px_-20px_var(--accent)]"
+          } ${state === "thinking" ? "breathe" : ""}`}
+        />
+      </span>
     </div>
   );
 }
@@ -373,38 +391,43 @@ function Timer({ startedAt, maxSeconds }: { startedAt: number | null; maxSeconds
   }, []);
   const elapsed = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
   const left = Math.max(0, maxSeconds - elapsed);
-  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   return (
-    <p className="font-mono text-sm text-muted tabular-nums">
-      {mmss(elapsed)} <span className="opacity-60">/ {mmss(maxSeconds)}</span>
-      {startedAt && left <= 30 && <span className="ml-2 text-danger">ending soon</span>}
+    <p className="font-mono text-sm tabular-nums">
+      {mmss(elapsed)} <span className="text-muted">/ {mmss(maxSeconds)}</span>
+      {startedAt && left <= 30 && <span className="ml-3 text-danger">ending soon</span>}
     </p>
   );
 }
 
-function TranscriptPanel({ lines }: { lines: Line[] }) {
+function TranscriptPanel({ lines, agentName }: { lines: Line[]; agentName: string }) {
   const ref = useRef<HTMLOListElement>(null);
   useEffect(() => {
     ref.current?.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [lines]);
 
   return (
-    <section className="flex max-h-[70vh] min-h-[300px] flex-col rounded-3xl border border-border bg-surface">
-      <h2 className="border-b border-border px-4 py-3 text-sm font-medium">Live transcript</h2>
+    <section
+      aria-labelledby="transcript"
+      className="flex max-h-[80vh] min-h-[600px] min-w-0 flex-[1_1_380px] flex-col rounded-[28px] border border-border"
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-border px-7 py-5">
+        <h2 id="transcript" className="label font-normal">
+          Live transcript
+        </h2>
+        <span className="flex items-center gap-2 font-mono text-xs">
+          <span className="size-[7px] rounded-full bg-accent" aria-hidden="true" />
+          Live
+        </span>
+      </div>
       {lines.length === 0 ? (
-        <p className="m-auto px-6 text-center text-sm text-muted">The conversation will appear here as you talk.</p>
+        <p className="m-auto max-w-[260px] px-6 text-center text-sm leading-relaxed text-muted">
+          The conversation appears here as you talk.
+        </p>
       ) : (
-        <ol ref={ref} className="flex flex-col gap-3 overflow-y-auto p-4">
+        <ol ref={ref} className="flex flex-col gap-6 overflow-y-auto p-7">
           {lines.map((l) => (
-            <li key={l.id} className={`flex ${l.who === "user" ? "justify-end" : ""}`}>
-              <p
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
-                  l.who === "user" ? "rounded-br-md bg-accent text-accent-text" : "rounded-bl-md bg-surface-2"
-                } ${l.final ? "" : "opacity-70"}`}
-              >
-                {l.text}
-              </p>
-            </li>
+            <TranscriptLine key={l.id} who={l.who} name={agentName} text={l.text} dim={!l.final} />
           ))}
         </ol>
       )}
@@ -412,7 +435,41 @@ function TranscriptPanel({ lines }: { lines: Line[] }) {
   );
 }
 
-function Summary({ ticket, liveLines, onAgain }: { ticket: string | null; liveLines: Line[]; onAgain: () => void }) {
+function TranscriptLine({
+  who,
+  name,
+  text,
+  dim,
+  note,
+}: {
+  who: "user" | "agent";
+  name: string;
+  text: string;
+  dim?: boolean;
+  note?: string;
+}) {
+  return (
+    <li className={`flex flex-col gap-1.5 ${who === "user" ? "border-l border-border-strong pl-5" : ""}`}>
+      <span className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">
+        {who === "user" ? "You" : name}
+        {note && <span className="ml-2 normal-case">· {note}</span>}
+      </span>
+      <p className={`text-base leading-relaxed ${dim ? "text-muted" : ""}`}>{text}</p>
+    </li>
+  );
+}
+
+function Summary({
+  ticket,
+  liveLines,
+  agentName,
+  onAgain,
+}: {
+  ticket: string | null;
+  liveLines: Line[];
+  agentName: string;
+  onAgain: () => void;
+}) {
   const [data, setData] = useState<VoiceSummary | null>(null);
   const [loading, setLoading] = useState(ticket !== null);
 
@@ -449,21 +506,18 @@ function Summary({ ticket, liveLines, onAgain }: { ticket: string | null; liveLi
   })();
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Call ended</h2>
-          <p className="text-sm text-muted">Transcript and cost come straight from the CallMissed session API.</p>
-        </div>
+    <div className="mx-auto flex max-w-[760px] flex-col gap-10">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <PageIntro eyebrow="Voice agent · Summary" title="Call ended." />
         <Button variant="primary" onClick={onAgain}>
           <IconMic width={18} height={18} /> New call
         </Button>
       </div>
 
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="grid grid-cols-2 border-t border-text sm:grid-cols-4">
         <Stat label="Duration" value={data?.durationSeconds != null ? `${Math.round(data.durationSeconds)}s` : "—"} />
         <Stat label="Turns" value={data ? String(data.turnCount) : "—"} />
-        <Stat label="Avg. first audio" value={avgLatency != null ? `${avgLatency} ms` : "—"} />
+        <Stat label="First audio" value={avgLatency != null ? `${avgLatency}ms` : "—"} />
         <Stat
           label="Cost"
           value={data?.credits != null ? `${data.credits.toFixed(2)} cr` : loading ? "…" : "—"}
@@ -472,38 +526,43 @@ function Summary({ ticket, liveLines, onAgain }: { ticket: string | null; liveLi
       </dl>
 
       {data && data.costItems.length > 0 && (
-        <div className="flex flex-wrap gap-2 text-xs text-muted">
+        <ul className="-mt-4 flex flex-wrap gap-2">
           {data.costItems.map((i) => (
-            <span key={`${i.service}-${i.model}`} className="rounded-full border border-border px-2.5 py-1">
-              {i.service.toUpperCase()} · {i.model} · {i.credits.toFixed(2)} cr
-            </span>
+            <li
+              key={`${i.service}-${i.model}`}
+              className="rounded-full border border-border px-3 py-1 font-mono text-xs text-muted"
+            >
+              {i.service.toUpperCase()} · {i.model} · {i.credits.toFixed(2)}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
-      <section className="rounded-2xl border border-border bg-surface">
-        <h3 className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium">
-          Transcript {loading && <Spinner className="text-muted" />}
-        </h3>
-        <ol className="flex flex-col gap-3 p-4">
+      <section aria-labelledby="final-transcript" className="flex flex-col gap-6">
+        <h2 id="final-transcript" className="label flex items-center gap-2 border-b border-border pb-4 font-normal">
+          Transcript {loading && <Spinner className="size-3" />}
+        </h2>
+        <ol className="flex flex-col gap-6">
           {turns.length > 0
-            ? turns.map((t, i) => (
-                <li key={i} className="flex flex-col gap-2">
-                  {t.user && <Bubble who="user" text={t.user} />}
-                  {t.agent && <Bubble who="agent" text={t.agent} note={t.interrupted ? "interrupted" : undefined} />}
-                </li>
-              ))
+            ? turns.flatMap((t, i) => [
+                t.user && <TranscriptLine key={`u${i}`} who="user" name={agentName} text={t.user} />,
+                t.agent && (
+                  <TranscriptLine
+                    key={`a${i}`}
+                    who="agent"
+                    name={agentName}
+                    text={t.agent}
+                    note={t.interrupted ? "interrupted" : undefined}
+                  />
+                ),
+              ])
             : liveLines
                 .filter((l) => l.final)
-                .map((l) => (
-                  <li key={l.id}>
-                    <Bubble who={l.who} text={l.text} />
-                  </li>
-                ))}
-          {!loading && turns.length === 0 && liveLines.length === 0 && (
-            <li className="text-center text-sm text-muted">No speech was captured in this call.</li>
-          )}
+                .map((l) => <TranscriptLine key={l.id} who={l.who} name={agentName} text={l.text} />)}
         </ol>
+        {!loading && turns.length === 0 && liveLines.length === 0 && (
+          <p className="text-sm text-muted">No speech was captured in this call.</p>
+        )}
       </section>
     </div>
   );
@@ -511,25 +570,10 @@ function Summary({ ticket, liveLines, onAgain }: { ticket: string | null; liveLi
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-3">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-1 text-lg font-semibold tabular-nums">{value}</dd>
-      {hint && <dd className="text-xs text-muted">{hint}</dd>}
-    </div>
-  );
-}
-
-function Bubble({ who, text, note }: { who: "user" | "agent"; text: string; note?: string }) {
-  return (
-    <div className={`flex ${who === "user" ? "justify-end" : ""}`}>
-      <p
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
-          who === "user" ? "rounded-br-md bg-accent text-accent-text" : "rounded-bl-md bg-surface-2"
-        }`}
-      >
-        {text}
-        {note && <span className="ml-2 text-[11px] opacity-70">({note})</span>}
-      </p>
+    <div className="flex flex-col gap-1.5 border-b border-border py-5 pr-4">
+      <dt className="label">{label}</dt>
+      <dd className="text-[28px] font-medium tracking-[-0.03em] tabular-nums">{value}</dd>
+      {hint && <dd className="font-mono text-xs text-muted">{hint}</dd>}
     </div>
   );
 }

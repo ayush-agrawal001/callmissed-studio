@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS, IMAGE_SIZES, type ImageSize } from "@/lib/catalog";
 import { deleteImage, listImages, putImage, type StoredImage } from "@/lib/imageStore";
 import { uid } from "@/lib/storage";
-import { apiError, Button, ErrorBanner, IconButton, PageHeader, Spinner } from "@/components/ui";
+import { apiError, Button, ErrorBanner, FIELD, IconButton, PageIntro, Spinner } from "@/components/ui";
 import { IconCopy, IconDownload, IconImage, IconRefresh, IconSparkle, IconTrash, IconX } from "@/components/icons";
 
 const SIZE_LABELS: Record<ImageSize, string> = {
@@ -17,15 +17,19 @@ const SIZE_LABELS: Record<ImageSize, string> = {
 const IDEAS = [
   "A cosy Mumbai chai stall at dawn, warm light, steam rising, cinematic photography",
   "Isometric illustration of a tiny call centre run by friendly robots, pastel colours",
-  "A peacock made of stained glass, intricate detail, backlit, 4k",
+  "A peacock made of stained glass, intricate detail, backlit",
   "Futuristic Bengaluru skyline at night with flying auto-rickshaws, neon, rain",
-  "Minimal flat logo concept of a speech bubble turning into a sound wave, indigo and white",
+  "Minimal flat logo of a speech bubble turning into a sound wave, black and white",
   "Watercolour painting of a Kerala backwater houseboat at sunset",
 ];
 
 function aspect(size: string) {
   const [w, h] = size.split("x").map(Number);
   return `${w} / ${h}`;
+}
+
+function fileName(img: StoredImage) {
+  return `callmissed-${img.id.slice(0, 8)}.${img.image.startsWith("data:image/jpeg") ? "jpg" : "png"}`;
 }
 
 export function ImageStudio() {
@@ -104,191 +108,198 @@ export function ImageStudio() {
   };
 
   return (
-    <div className="flex flex-1 flex-col">
-      <PageHeader title="Image studio" subtitle="Text-to-image with FLUX, Leonardo and SDXL models on CallMissed" />
+    <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-start gap-10 px-4 py-10 sm:px-8 sm:py-12">
+      <form
+        aria-label="Generate an image"
+        className="flex min-w-0 flex-[1_1_340px] flex-col gap-7 lg:max-w-[400px]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void generate();
+        }}
+      >
+        <PageIntro eyebrow="Image studio" title="Describe it." />
 
-      <div className="grid flex-1 gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(320px,400px)_1fr]">
-        {/* Controls */}
-        <form
-          className="flex flex-col gap-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void generate();
-          }}
-        >
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <label htmlFor="prompt" className="text-sm font-medium">
-                Prompt
-              </label>
-              <button
-                type="button"
-                onClick={() => setPrompt(IDEAS[Math.floor(Math.random() * IDEAS.length)])}
-                className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
-              >
-                <IconSparkle width={14} height={14} /> Surprise me
-              </button>
-            </div>
-            <textarea
-              id="prompt"
-              rows={4}
-              value={prompt}
-              maxLength={1000}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void generate();
-              }}
-              placeholder="Describe the image you want…"
-              className="resize-y rounded-xl border border-border bg-surface p-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-[var(--ring)]"
-            />
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="prompt" className="text-sm font-medium">
+              Prompt
+            </label>
+            <button
+              type="button"
+              onClick={() => setPrompt(IDEAS[Math.floor(Math.random() * IDEAS.length)])}
+              className="inline-flex items-center gap-1.5 font-mono text-xs text-muted transition hover:text-text"
+            >
+              <IconSparkle width={13} height={13} /> Surprise me
+            </button>
           </div>
+          <textarea
+            id="prompt"
+            rows={4}
+            value={prompt}
+            maxLength={1000}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void generate();
+            }}
+            placeholder="A small red paper boat on calm blue water…"
+            className={`${FIELD} resize-y py-3.5 leading-relaxed`}
+          />
+        </div>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1.5 text-sm font-medium">Model</legend>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              {IMAGE_MODELS.map((m) => (
+        <fieldset>
+          <legend className="mb-2.5 text-sm font-medium">Model</legend>
+          <div className="border-t border-border">
+            {IMAGE_MODELS.map((m) => {
+              const on = model === m.id;
+              return (
                 <label
                   key={m.id}
-                  className={`cursor-pointer rounded-xl border p-3 text-sm transition ${
-                    model === m.id ? "border-accent bg-accent-soft" : "border-border bg-surface hover:border-muted"
-                  }`}
+                  className="flex min-h-[60px] cursor-pointer items-center gap-3.5 border-b border-border px-1 py-2.5"
                 >
                   <input
                     type="radio"
                     name="model"
                     value={m.id}
-                    checked={model === m.id}
+                    checked={on}
                     onChange={() => setModel(m.id)}
-                    className="sr-only"
+                    className="peer sr-only"
                   />
-                  <span className="flex items-center justify-between gap-2 font-medium">
-                    {m.label}
-                    <span className="text-xs font-normal text-muted">{m.credits} cr</span>
-                  </span>
-                  <span className="text-xs text-muted">{m.speed}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend className="mb-2 text-sm font-medium">Size</legend>
-            <div className="flex flex-wrap gap-2">
-              {IMAGE_SIZES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={size === s}
-                  onClick={() => setSize(s)}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs ${
-                    size === s ? "border-accent bg-accent-soft text-accent" : "border-border text-muted hover:text-text"
-                  }`}
-                >
                   <span
-                    className="inline-block w-3.5 rounded-[2px] border border-current"
-                    style={{ aspectRatio: aspect(s) }}
                     aria-hidden="true"
+                    className={`size-2.5 shrink-0 rounded-full peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-text ${
+                      on ? "bg-accent" : "border-[1.5px] border-border-strong"
+                    }`}
                   />
-                  {SIZE_LABELS[s]}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <details className="rounded-xl border border-border bg-surface">
-            <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium select-none">Advanced</summary>
-            <div className="flex flex-col gap-3 border-t border-border p-3">
-              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                Negative prompt {model === "lucid-origin" && <span>(not supported by Lucid Origin)</span>}
-                <input
-                  value={negative}
-                  maxLength={500}
-                  disabled={model === "lucid-origin"}
-                  onChange={(e) => setNegative(e.target.value)}
-                  placeholder="blurry, low quality, text, watermark"
-                  className="h-9 rounded-lg border border-border bg-bg px-2.5 text-sm font-normal text-text outline-none focus:border-accent disabled:opacity-50"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                Seed (blank = random)
-                <input
-                  value={seed}
-                  inputMode="numeric"
-                  onChange={(e) => setSeed(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="e.g. 42"
-                  className="h-9 rounded-lg border border-border bg-bg px-2.5 text-sm font-normal text-text outline-none focus:border-accent"
-                />
-              </label>
-            </div>
-          </details>
-
-          {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
-
-          <Button type="submit" variant="primary" disabled={pending || prompt.trim().length < 3} className="h-11">
-            {pending ? (
-              <>
-                <Spinner /> Generating…
-              </>
-            ) : (
-              <>
-                <IconSparkle width={18} height={18} /> Generate · {selected.credits} credits
-              </>
-            )}
-          </Button>
-        </form>
-
-        {/* Preview + gallery */}
-        <div className="flex min-w-0 flex-col gap-6">
-          <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-border bg-surface p-3">
-            {pending ? (
-              <div
-                className="skeleton w-full max-w-xl rounded-xl"
-                style={{ aspectRatio: aspect(size) }}
-                aria-label="Generating image"
-              />
-            ) : current ? (
-              <figure className="flex w-full max-w-xl flex-col gap-3">
-                <button type="button" onClick={() => setLightbox(current)} className="overflow-hidden rounded-xl">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the API */}
-                  <img src={current.image} alt={current.prompt} className="w-full" />
-                </button>
-                <figcaption className="flex items-start gap-2">
-                  <p className="line-clamp-2 flex-1 text-sm text-muted">{current.prompt}</p>
-                  <ImageActions img={current} onReuse={reuse} />
-                </figcaption>
-              </figure>
-            ) : (
-              <div className="text-center text-muted">
-                <IconImage width={40} height={40} className="mx-auto mb-3 opacity-60" />
-                <p className="text-sm">Your generated image will appear here.</p>
-              </div>
-            )}
+                  <span className="flex flex-1 flex-col gap-0.5">
+                    <span className="text-[15px] font-medium">{m.label}</span>
+                    <span className="text-[13px] text-muted">{m.speed}</span>
+                  </span>
+                  <span className="font-mono text-xs text-muted">{m.credits} cr</span>
+                </label>
+              );
+            })}
           </div>
+        </fieldset>
 
-          {gallery.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-sm font-medium">
-                History <span className="font-normal text-muted">· saved in this browser</span>
-              </h2>
-              <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-6">
-                {gallery.map((img) => (
-                  <li key={img.id}>
-                    <button
-                      type="button"
-                      onClick={() => setCurrent(img)}
-                      className={`block aspect-square w-full overflow-hidden rounded-lg border-2 ${
-                        current?.id === img.id ? "border-accent" : "border-transparent"
-                      }`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element -- data URL from IndexedDB */}
-                      <img src={img.image} alt={img.prompt} className="size-full object-cover" loading="lazy" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
+        <fieldset>
+          <legend className="mb-2.5 text-sm font-medium">Size</legend>
+          <div className="flex flex-wrap gap-2">
+            {IMAGE_SIZES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={size === s}
+                onClick={() => setSize(s)}
+                className={`h-11 rounded-full border px-4 text-sm transition ${
+                  size === s ? "border-text bg-text text-bg" : "border-border-strong bg-surface hover:border-text"
+                }`}
+              >
+                {SIZE_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <details className="group border-y border-border">
+          <summary className="flex cursor-pointer items-center justify-between py-3.5 text-sm font-medium select-none">
+            Advanced
+            <span aria-hidden="true" className="font-mono text-muted transition group-open:rotate-45">
+              +
+            </span>
+          </summary>
+          <div className="flex flex-col gap-4 pb-5">
+            <label className="flex flex-col gap-2 text-[13px] text-muted">
+              Negative prompt{model === "lucid-origin" && " (not supported by Lucid Origin)"}
+              <input
+                value={negative}
+                maxLength={500}
+                disabled={model === "lucid-origin"}
+                onChange={(e) => setNegative(e.target.value)}
+                placeholder="blurry, low quality, watermark"
+                className={`${FIELD} h-11 disabled:opacity-50`}
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-[13px] text-muted">
+              Seed — leave blank for random
+              <input
+                value={seed}
+                inputMode="numeric"
+                onChange={(e) => setSeed(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="42"
+                className={`${FIELD} h-11 font-mono`}
+              />
+            </label>
+          </div>
+        </details>
+
+        {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
+
+        <Button type="submit" variant="primary" disabled={pending || prompt.trim().length < 3} className="h-14 text-base">
+          {pending ? (
+            <>
+              <Spinner /> Generating…
+            </>
+          ) : (
+            <>
+              Generate <span className="font-mono text-[13px] opacity-60">· {selected.credits} credits</span>
+            </>
           )}
-        </div>
+        </Button>
+      </form>
+
+      <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-8">
+        {pending ? (
+          <div className="skeleton w-full rounded-3xl" style={{ aspectRatio: aspect(size) }} aria-label="Generating image" />
+        ) : current ? (
+          <figure className="flex flex-col gap-4">
+            <button type="button" onClick={() => setLightbox(current)} className="overflow-hidden rounded-3xl bg-surface-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the API */}
+              <img src={current.image} alt={current.prompt} className="w-full" />
+            </button>
+            <figcaption className="flex flex-wrap items-center justify-between gap-3">
+              <span className="line-clamp-2 min-w-0 flex-1 text-[15px] text-muted">{current.prompt}</span>
+              <span className="flex items-center gap-2">
+                <span className="font-mono text-xs text-muted">
+                  {IMAGE_MODELS.find((m) => m.id === current.model)?.label ?? current.model} ·{" "}
+                  {current.size.replace("x", " × ")}
+                </span>
+                <ImageActions img={current} onReuse={reuse} />
+              </span>
+            </figcaption>
+          </figure>
+        ) : (
+          <div className="grid aspect-square w-full place-items-center rounded-3xl border border-dashed border-border-strong text-center text-muted">
+            <div>
+              <IconImage width={32} height={32} className="mx-auto mb-3" />
+              <p className="text-sm">Your image will appear here.</p>
+            </div>
+          </div>
+        )}
+
+        {gallery.length > 0 && (
+          <section aria-labelledby="history" className="flex flex-col gap-4 border-t border-border pt-5">
+            <h2 id="history" className="label font-normal">
+              History · saved in this browser
+            </h2>
+            <ul className="grid grid-cols-4 gap-2.5 sm:grid-cols-6">
+              {gallery.map((img) => (
+                <li key={img.id}>
+                  <button
+                    type="button"
+                    onClick={() => setCurrent(img)}
+                    aria-pressed={current?.id === img.id}
+                    className={`block aspect-square w-full overflow-hidden rounded-xl ${
+                      current?.id === img.id ? "outline-2 outline-offset-2 outline-text" : ""
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- data URL from IndexedDB */}
+                    <img src={img.image} alt={img.prompt} className="size-full object-cover" loading="lazy" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
 
       {lightbox && <Lightbox img={lightbox} onClose={() => setLightbox(null)} onReuse={reuse} onDelete={remove} />}
@@ -298,13 +309,13 @@ export function ImageStudio() {
 
 function ImageActions({ img, onReuse }: { img: StoredImage; onReuse: (i: StoredImage) => void }) {
   return (
-    <div className="flex shrink-0 items-center">
+    <span className="flex items-center">
       <a
         href={img.image}
-        download={`callmissed-${img.id.slice(0, 8)}.${img.image.startsWith("data:image/jpeg") ? "jpg" : "png"}`}
+        download={fileName(img)}
         aria-label="Download"
         title="Download"
-        className="inline-grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-text"
+        className="inline-grid size-9 place-items-center rounded-full text-muted transition hover:bg-surface-2 hover:text-text"
       >
         <IconDownload width={16} height={16} />
       </a>
@@ -314,7 +325,7 @@ function ImageActions({ img, onReuse }: { img: StoredImage; onReuse: (i: StoredI
       <IconButton label="Reuse settings" onClick={() => onReuse(img)}>
         <IconRefresh width={16} height={16} />
       </IconButton>
-    </div>
+    </span>
   );
 }
 
@@ -341,52 +352,52 @@ function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label="Image details"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-surface md:flex-row"
+        className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-bg md:flex-row"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-black">
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-surface-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- data URL */}
-          <img src={img.image} alt={img.prompt} className="max-h-[70vh] w-auto object-contain md:max-h-[85vh]" />
+          <img src={img.image} alt={img.prompt} className="max-h-[65vh] w-auto object-contain md:max-h-[85vh]" />
         </div>
-        <div className="flex w-full flex-col gap-3 p-4 md:w-72">
+        <div className="flex w-full flex-col gap-5 p-6 md:w-80">
           <div className="flex items-start justify-between gap-2">
-            <h2 className="font-medium">Details</h2>
+            <p className="label pt-2">Details</p>
             <IconButton label="Close" onClick={onClose}>
-              <IconX />
+              <IconX width={18} height={18} />
             </IconButton>
           </div>
-          <p className="text-sm">{img.prompt}</p>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted">
-            <dt>Model</dt>
-            <dd className="text-text">{model?.label ?? img.model}</dd>
-            <dt>Size</dt>
-            <dd className="text-text">{img.size}</dd>
+          <p className="text-[15px] leading-relaxed">{img.prompt}</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-border pt-4 font-mono text-xs">
+            <dt className="text-muted">Model</dt>
+            <dd>{model?.label ?? img.model}</dd>
+            <dt className="text-muted">Size</dt>
+            <dd>{img.size.replace("x", " × ")}</dd>
             {img.seed !== undefined && (
               <>
-                <dt>Seed</dt>
-                <dd className="text-text">{img.seed}</dd>
+                <dt className="text-muted">Seed</dt>
+                <dd>{img.seed}</dd>
               </>
             )}
-            <dt>Created</dt>
-            <dd className="text-text">{new Date(img.createdAt).toLocaleString()}</dd>
+            <dt className="text-muted">Created</dt>
+            <dd>{new Date(img.createdAt).toLocaleString()}</dd>
           </dl>
           <div className="mt-auto flex flex-wrap gap-2 pt-2">
             <Button onClick={() => onReuse(img)}>
-              <IconRefresh width={16} height={16} /> Reuse
+              <IconRefresh width={15} height={15} /> Reuse
             </Button>
             <a
               href={img.image}
-              download={`callmissed-${img.id.slice(0, 8)}.png`}
-              className="inline-flex items-center gap-2 rounded-lg border border-border px-3.5 py-2 text-sm font-medium hover:bg-surface-2"
+              download={fileName(img)}
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-border-strong px-5 text-sm font-medium transition hover:border-text"
             >
-              <IconDownload width={16} height={16} /> Download
+              <IconDownload width={15} height={15} /> Download
             </a>
-            <Button variant="ghost" onClick={() => onDelete(img)} className="text-danger">
-              <IconTrash width={16} height={16} /> Delete
+            <Button variant="ghost" onClick={() => onDelete(img)} className="text-danger hover:text-danger">
+              <IconTrash width={15} height={15} /> Delete
             </Button>
           </div>
         </div>
